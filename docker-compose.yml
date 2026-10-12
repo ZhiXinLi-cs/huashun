@@ -1,0 +1,58 @@
+# Banner 指纹识别系统：docker compose up --build 一键启动
+# 架构：server（长驻服务） + client（一次性任务，读本地 JSON → 发 server → 打印结果）
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    image: banner-fingerprint-server:latest
+    environment:
+      RULES_FILE: /etc/fingerprint/rules.yaml
+      SERVER_ADDR: ":8080"
+    # 端口只在 compose 内部网络可见，不映射到宿主机（访问收敛）；
+    # 如需从宿主机手动 curl 调试，取消下面注释：
+    # ports:
+    #   - "8080:8080"
+    expose:
+      - "8080"
+    # 真实健康检测：周期性请求 /health，供 client 的 service_healthy 依赖使用
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # 权限收紧：只读根文件系统、禁用全部 capability、禁止提权
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - fingerprint
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    image: banner-fingerprint-client:latest
+    # 真实启动依赖：等 server 健康检查通过后才启动 client
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      SERVER_URL: http://server:8080   # 通过服务名访问，走 compose 内部 DNS，不写死 IP
+      CLIENT_FILE: /data/samples.json
+    volumes:
+      - ./data:/data:ro                # 换自己的数据只需替换 data/samples.json
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - fingerprint
+
+# 自定义桥接网络：容器间访问收敛在内部网络，与宿主机网络隔离
+networks:
+  fingerprint:
+    driver: bridge

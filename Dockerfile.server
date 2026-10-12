@@ -1,0 +1,21 @@
+# ---------- 构建阶段：编译 Go 二进制 ----------
+FROM golang:1.26-alpine AS builder
+WORKDIR /src
+# 先复制依赖清单并下载，充分利用镜像层缓存
+COPY go.mod go.sum ./
+RUN go mod download
+# 复制源码并编译：静态链接、裁剪符号，产出最小二进制
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+
+# ---------- 运行阶段：只保留二进制与规则文件 ----------
+FROM alpine:3.20
+# 非 root 用户运行（权限收紧）
+RUN addgroup -S app && adduser -S -G app app
+COPY --from=builder /out/server /usr/local/bin/server
+COPY config/rules.yaml /etc/fingerprint/rules.yaml
+# 规则路径可被环境变量覆盖，支持 volume 挂载替换规则
+ENV RULES_FILE=/etc/fingerprint/rules.yaml
+USER app
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/server"]

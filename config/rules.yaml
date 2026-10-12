@@ -1,0 +1,119 @@
+# ============================================================
+# Banner 指纹识别规则（与程序代码解耦）
+# - 规则按 priority 从高到低匹配，首个命中即停
+# - patterns 为多条正则，任一命中即该规则命中
+# - 正则第 1 个捕获组作为 version（无捕获组则 version 为空）
+# - 命中规则后，再用 os_hints 扫描 banner 填充 os_hint
+# 注意：正则一律用单引号包裹，YAML 单引号内 \d \s \b 等保持原义、不做转义
+# ============================================================
+
+# ---- 全局操作系统特征（命中后填充 os_hint 字段）----
+os_hints:
+  - {regex: '(?i)ubuntu',   os: Ubuntu}
+  - {regex: '(?i)debian',   os: Debian}
+  - {regex: '(?i)centos',   os: CentOS}
+  - {regex: '(?i)red\s?hat', os: RedHat}
+  - {regex: '(?i)windows',  os: Windows}
+  - {regex: '(?i)freebsd',  os: FreeBSD}
+  - {regex: '(?i)\bdarwin\b', os: macOS}
+
+# ---- 协议 / 软件识别规则 ----
+rules:
+  # ========== SSH ==========
+  - id: ssh-openssh
+    protocol: ssh
+    product: OpenSSH
+    priority: 100
+    confidence: 0.95
+    patterns:
+      - '^SSH-\d+\.\d+-OpenSSH[_-]([^\s]+)'     # 如 SSH-2.0-OpenSSH_8.9p1
+  - id: ssh-dropbear
+    protocol: ssh
+    product: Dropbear
+    priority: 100
+    confidence: 0.9
+    patterns:
+      - '^SSH-\d+\.\d+-dropbear_([^\s]+)'
+
+  # ========== HTTP ==========
+  - id: http-nginx
+    protocol: http
+    product: nginx
+    priority: 90
+    confidence: 0.95
+    patterns:
+      - '(?i)server:\s*nginx/([^\s]+)'          # 如 Server: nginx/1.24.0
+      - '(?i)\bnginx/([^\s]+)'
+      - '(?i)\bnginx\b'
+  - id: http-apache
+    protocol: http
+    product: Apache httpd
+    priority: 90
+    confidence: 0.95
+    patterns:
+      - '(?i)server:\s*apache/([^\s]+)'         # 如 Server: Apache/2.4.57
+      - '(?i)\bapache/([^\s]+)'
+      - '(?i)\bapache\b'
+  - id: http-jetty
+    protocol: http
+    product: Jetty
+    priority: 90
+    confidence: 0.9
+    patterns:
+      - '(?i)jetty\(([^\s)]+)'                  # 如 Server: Jetty(9.4.50.v20221201)
+      - '(?i)jetty/([^\s]+)'
+      - '(?i)\bjetty\b'
+
+  # ========== MySQL ==========
+  - id: mysql
+    protocol: mysql
+    product: MySQL
+    priority: 80
+    confidence: 0.9
+    patterns:
+      - '^(\d+\.\d+\.\d+)'                      # 版本号开头的握手报文，MySQL 特有
+      - '(?i)mysql'
+
+  # ========== Redis ==========
+  - id: redis
+    protocol: redis
+    product: Redis
+    priority: 80
+    confidence: 0.9
+    patterns:
+      - 'redis_version:([^\s]+)'                # INFO 输出
+      - '(?i)\+PONG'                            # PING 响应
+      - '(?i)\-NOAUTH'                          # 未认证响应
+      - '(?i)\bredis\b'
+
+  # ========== FTP ==========
+  - id: ftp-vsftpd
+    protocol: ftp
+    product: vsFTPd
+    priority: 70
+    confidence: 0.9
+    patterns:
+      - '(?i)vsftpd\s+([^\s)]+)'                # 如 220 (vsFTPd 3.0.5)
+      - '(?i)vsftpd'
+  - id: ftp-proftpd
+    protocol: ftp
+    product: ProFTPD
+    priority: 70
+    confidence: 0.9
+    patterns:
+      - '(?i)proftpd\s+([^\s]+)'                # 如 220 ProFTPD 1.3.8 Server (Debian)
+      - '(?i)proftpd'
+  - id: ftp-pureftpd
+    protocol: ftp
+    product: Pure-FTPd
+    priority: 70
+    confidence: 0.85
+    patterns:
+      - '(?i)pure-ftpd'
+  - id: ftp-microsoft
+    protocol: ftp
+    product: Microsoft FTP
+    priority: 70
+    confidence: 0.8
+    patterns:
+      - '(?i)microsoft ftp'

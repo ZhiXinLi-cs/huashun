@@ -4,7 +4,7 @@
 # - patterns 为多条正则，任一命中即该规则命中
 # - 正则第 1 个捕获组作为 version（无捕获组则 version 为空）
 # - 命中规则后，再用 os_hints 扫描 banner 填充 os_hint
-# 注意：正则一律用单引号包裹，YAML 单引号内 \d \s \b 等保持原义、不做转义
+# 注意：正则一律用单引号包裹，YAML 单引号内 \d \s \b \x 等保持原义、不做转义
 # ============================================================
 
 # ---- 全局操作系统特征（命中后填充 os_hint 字段）----
@@ -21,14 +21,14 @@ os_hints:
 rules:
   # ========== SSH ==========
   - id: ssh-openssh
-    protocol: ssh
+    protocol: SSH
     product: OpenSSH
     priority: 100
     confidence: 0.95
     patterns:
-      - '^SSH-\d+\.\d+-OpenSSH[_-]([^\s]+)'     # 如 SSH-2.0-OpenSSH_8.9p1
+      - '^SSH-\d+\.\d+-OpenSSH[_-]([^\s]+)'   # 兼容 SSH-2.0 与 SSH-1.99 前缀
   - id: ssh-dropbear
-    protocol: ssh
+    protocol: SSH
     product: Dropbear
     priority: 100
     confidence: 0.9
@@ -37,58 +37,84 @@ rules:
 
   # ========== HTTP ==========
   - id: http-nginx
-    protocol: http
+    protocol: HTTP
     product: nginx
     priority: 90
-    confidence: 0.95
+    confidence: 0.9
     patterns:
       - '(?i)server:\s*nginx/([^\s]+)'          # 如 Server: nginx/1.24.0
       - '(?i)\bnginx/([^\s]+)'
       - '(?i)\bnginx\b'
   - id: http-apache
-    protocol: http
-    product: Apache httpd
+    protocol: HTTP
+    product: Apache
     priority: 90
-    confidence: 0.95
+    confidence: 0.9
     patterns:
       - '(?i)server:\s*apache/([^\s]+)'         # 如 Server: Apache/2.4.57
       - '(?i)\bapache/([^\s]+)'
       - '(?i)\bapache\b'
   - id: http-jetty
-    protocol: http
+    protocol: HTTP
     product: Jetty
     priority: 90
-    confidence: 0.9
+    confidence: 0.85
     patterns:
       - '(?i)jetty\(([^\s)]+)'                  # 如 Server: Jetty(9.4.50.v20221201)
-      - '(?i)jetty/([^\s]+)'
+      - '(?i)jetty/([^\s]+)'                    # 如 Server: Jetty/9.4.51
       - '(?i)\bjetty\b'
 
   # ========== MySQL ==========
   - id: mysql
-    protocol: mysql
+    protocol: MySQL
     product: MySQL
     priority: 80
     confidence: 0.9
     patterns:
-      - '^(\d+\.\d+\.\d+)'                      # 版本号开头的握手报文，MySQL 特有
-      - '(?i)mysql'
+      - '^(\d+\.\d+\.\d+)'                      # 纯版本号开头的 banner
+      - '\x0a(\d+\.\d+\.\d+)'                   # 握手报文：报文头后 \n 紧跟版本号（如 J\x00\x00\x00\n8.0.32\x00）
+      - '(?i)mysql'                             # 关键词兜底
 
-  # ========== Redis ==========
-  - id: redis
-    protocol: redis
+  # ========== Redis（按信号强弱分档置信度）==========
+  - id: redis-version
+    protocol: Redis
     product: Redis
     priority: 80
     confidence: 0.9
     patterns:
-      - 'redis_version:([^\s]+)'                # INFO 输出
-      - '(?i)\+PONG'                            # PING 响应
-      - '(?i)\-NOAUTH'                          # 未认证响应
+      - 'redis_version:([^\s]+)'                # INFO 输出，最强信号
+  - id: redis-pong
+    protocol: Redis
+    product: Redis
+    priority: 79
+    confidence: 0.8
+    patterns:
+      - '(?i)^\+PONG'
+  - id: redis-noauth
+    protocol: Redis
+    product: Redis
+    priority: 79
+    confidence: 0.7
+    patterns:
+      - '(?i)^-NOAUTH'
+  - id: redis-err
+    protocol: Redis
+    product: Redis
+    priority: 79
+    confidence: 0.7
+    patterns:
+      - '(?i)^-ERR'                             # RESP 错误响应（无版本号）
+  - id: redis-keyword
+    protocol: Redis
+    product: Redis
+    priority: 78
+    confidence: 0.7
+    patterns:
       - '(?i)\bredis\b'
 
   # ========== FTP ==========
   - id: ftp-vsftpd
-    protocol: ftp
+    protocol: FTP
     product: vsFTPd
     priority: 70
     confidence: 0.9
@@ -96,22 +122,22 @@ rules:
       - '(?i)vsftpd\s+([^\s)]+)'                # 如 220 (vsFTPd 3.0.5)
       - '(?i)vsftpd'
   - id: ftp-proftpd
-    protocol: ftp
+    protocol: FTP
     product: ProFTPD
     priority: 70
     confidence: 0.9
     patterns:
-      - '(?i)proftpd\s+([^\s]+)'                # 如 220 ProFTPD 1.3.8 Server (Debian)
+      - '(?i)proftpd\s+([^\s]+)'                # 如 220 ProFTPD 1.3.7 Server (ProFTPD)
       - '(?i)proftpd'
   - id: ftp-pureftpd
-    protocol: ftp
+    protocol: FTP
     product: Pure-FTPd
     priority: 70
     confidence: 0.85
     patterns:
       - '(?i)pure-ftpd'
   - id: ftp-microsoft
-    protocol: ftp
+    protocol: FTP
     product: Microsoft FTP
     priority: 70
     confidence: 0.8

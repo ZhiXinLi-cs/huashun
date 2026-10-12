@@ -76,12 +76,12 @@ go run ./cmd/client
 
 ```json
 [
-  {"ip": "192.168.1.10", "port": 22, "protocol": "ssh", "product": "OpenSSH", "version": "8.9p1", "os_hint": "Ubuntu", "confidence": 0.95},
+  {"ip": "192.168.1.10", "port": 22, "protocol": "SSH", "product": "OpenSSH", "version": "8.9p1", "os_hint": "Ubuntu", "confidence": 0.95},
   {"ip": "10.0.0.99", "port": 54321, "protocol": "unknown", "product": "", "version": "", "os_hint": "", "confidence": 0}
 ]
 ```
 
-字段说明：`protocol`（协议，认不出为 `unknown`）、`product`（软件）、`version`（版本，取不到为空）、`os_hint`（操作系统线索，取不到为空）、`confidence`（置信度 0~1）。
+字段说明：`protocol`（协议名大写：`SSH`/`HTTP`/`MySQL`/`Redis`/`FTP`，认不出为 `unknown`）、`product`（软件）、`version`（版本，取不到为空）、`os_hint`（操作系统线索，取不到为空）、`confidence`（置信度 0~1，按信号强弱分档）。
 
 非法 JSON / 非数组请求体返回 `400 {"error":"invalid JSON body"}`；请求体上限 1MB。**任何输入都不会使服务崩溃**。
 
@@ -98,7 +98,7 @@ go run ./cmd/client
 ```yaml
 rules:
   - id: ssh-openssh
-    protocol: ssh
+    protocol: SSH
     product: OpenSSH
     priority: 100        # 数字越大越先匹配
     confidence: 0.95
@@ -106,7 +106,7 @@ rules:
       - '^SSH-\d+\.\d+-OpenSSH[_-]([^\s]+)'
 ```
 
-- 支持协议：**SSH**（OpenSSH/Dropbear）、**HTTP**（nginx/Apache httpd/Jetty）、**MySQL**、**Redis**、**FTP**（vsFTPd/ProFTPD/Pure-FTPd/Microsoft FTP），以及全局 `os_hints` 操作系统特征。
+- 支持协议：**SSH**（OpenSSH/Dropbear，兼容 `SSH-1.99` 前缀）、**HTTP**（nginx/Apache/Jetty）、**MySQL**（兼容纯版本号与 `\n` 后跟版本号的握手报文两种形态）、**Redis**（INFO 输出 / `+PONG` / `-NOAUTH` / `-ERR` 多信号，置信度分档）、**FTP**（vsFTPd/ProFTPD/Pure-FTPd/Microsoft FTP），以及全局 `os_hints` 操作系统特征。
 - 新增协议：在 `rules.yaml` 加一条规则即可，server 重启后生效（容器内也支持用 volume 挂载覆盖 `/etc/fingerprint/rules.yaml`）。
 - 规则正则一律用单引号包裹，YAML 不转义 `\d`、`\s`、`\b`。
 
